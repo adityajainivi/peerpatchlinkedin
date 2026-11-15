@@ -45,3 +45,20 @@ def test_console_that_cannot_print_rupee_gets_question_marks():
     stream.write("₹ 6,00,000 → done")
     stream.flush()
     assert raw.getvalue() == b"? 6,00,000 ? done"
+
+def test_browser_and_port_flags():
+    args = parse_args([])
+    assert (args.browser, args.port) == ("auto", 8765)
+    args = parse_args(["--browser", "edge", "--port", "9000"])
+    assert (args.browser, args.port) == ("edge", 9000)
+
+
+def test_options_from_args_carries_every_setting(tmp_path):
+    from peerpatch_linkedin.cli import options_from_args
+
+    args = parse_args(["--job", "x", "--browser", "brave", "--max-posts", "5", "--skip-jobs",
+                       "--profile-dir", str(tmp_path), "--results-dir", str(tmp_path / "r")])
+    options = options_from_args(args, "x", "Pune")
+    assert (options.job, options.location, options.browser, options.max_posts, options.skip_jobs) == (
+        "x", "Pune", "brave", 5, True)
+    assert (options.profile_base, options.results_dir) == (tmp_path, tmp_path / "r")

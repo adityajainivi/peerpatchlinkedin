@@ -1,21 +1,15 @@
-"""Read flags or ask questions, run the two searches, write the results."""
+"""Command line: run one search in the terminal."""
 from __future__ import annotations
 
 import argparse
 import sys
 import webbrowser
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
 from . import config
-from .browser import BrowserProblem, ScrapeResult, ScrapeStopped, ensure_logged_in, open_browser
-from .browsers import choose_browser, find_browsers, profile_dir_for
-from .jobs import scrape_jobs
-from .posts import scrape_posts
-from .report import results_dir, write_results
-
-MAX_POST_HOURS = 168
+from .browsers import KEYS
+from .runner import MAX_POST_HOURS, RunOutcome, SearchOptions, run_search
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -25,6 +19,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--job", help='job title to search for, e.g. "data analyst"')
     parser.add_argument("--location", help="location for the jobs search (default: India; \"\" for anywhere)")
+    parser.add_argument("--browser", choices=KEYS, default="auto",
+                        help="browser to drive (default: Chrome, then Edge, then Brave, else the built-in one)")
     parser.add_argument("--max-posts", type=int, default=100, help="stop after this many hiring posts (default 100)")
     parser.add_argument("--max-jobs", type=int, default=200, help="stop after this many jobs (default 200)")
     parser.add_argument("--post-hours", type=int, default=48, help="how far back posts go, 1 to 168 (default 48)")
@@ -32,9 +28,11 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--skip-posts", action="store_true", help="only search jobs")
     parser.add_argument("--skip-jobs", action="store_true", help="only search posts")
     parser.add_argument("--debug", action="store_true", help="save the raw pages into the results folder")
-    parser.add_argument("--no-open", action="store_true", help="don't open the report when done")
-    parser.add_argument("--profile-dir", type=Path, default=config.TOOL_DIR / "chrome-profile",
-                        help="where Chrome keeps the LinkedIn login (default: chrome-profile next to this tool)")
+    parser.add_argument("--no-open", action="store_true", help="don't open the report or the page")
+    parser.add_argument("--port", type=int, default=8765, help="port for the web page (default 8765)")
+    parser.add_argument("--profile-dir", type=Path, default=config.TOOL_DIR,
+                        help="folder that holds browser-profiles, where each browser keeps its LinkedIn login "
+                             "(default: next to this tool)")
     parser.add_argument("--results-dir", type=Path, default=config.TOOL_DIR / "results",
                         help="where results go (default: results next to this tool)")
     return parser.parse_args(argv)
@@ -75,6 +73,27 @@ def say(message: str) -> None:
     print(message, flush=True)
 
 
+def options_from_args(args: argparse.Namespace, job: str, location: str) -> SearchOptions:
+    return SearchOptions(
+        job=job, location=location, browser=args.browser, max_posts=args.max_posts, max_jobs=args.max_jobs,
+        post_hours=args.post_hours, job_days=args.job_days, skip_posts=args.skip_posts, skip_jobs=args.skip_jobs,
+        debug=args.debug, profile_base=args.profile_dir, results_dir=args.results_dir,
+    )
+
+
+def report_outcome(outcome: RunOutcome, open_report: bool) -> int:
+    if outcome.out_dir is None:
+        say(outcome.error or "Nothing was saved.")
+        return outcome.exit_code
+    for note in outcome.notes:
+        say(note)
+    say(f"\nDone. {len(outcome.posts)} hiring posts, {len(outcome.jobs)} jobs.")
+    say(f"Saved in: {outcome.out_dir}")
+    if open_report:
+        webbrowser.open(outcome.report.resolve().as_uri())
+    return outcome.exit_code
+
+
 def main(argv: list[str] | None = None, ask: Callable[[str], str] = input) -> int:
     make_console_safe()
     args = parse_args(argv)
@@ -84,56 +103,5 @@ def main(argv: list[str] | None = None, ask: Callable[[str], str] = input) -> in
     except (EOFError, KeyboardInterrupt):
         say("\nNo job title given. Nothing to do.")
         return 2
-
-    now = datetime.now(timezone.utc)
-    out_dir = results_dir(args.results_dir, job, location, now.astimezone())
-    debug_dir = out_dir / "debug" if args.debug else None
-    posts, jobs, notes = ScrapeResult(), ScrapeResult(), []
-
-    say(f"Searching LinkedIn for: {job} ({location or 'anywhere'})")
-    try:
-        info = choose_browser("auto", find_browsers())
-        with open_browser(info, profile_dir_for(args.profile_dir, info.key)) as page:
-            ensure_logged_in(page, say, label=info.label)
-            if not args.skip_posts:
-                say(f"Hiring posts from the last {args.post_hours} hours...")
-                posts = scrape_posts(page, job, say=say, max_hours=args.post_hours, max_posts=args.max_posts,
-                                     debug_dir=debug_dir, now=now)
-            if not args.skip_jobs and not posts.interrupted and not posts.blocked:
-                say(f"Jobs from the last {args.job_days} days...")
-                jobs = scrape_jobs(page, job, location, say=say, days=args.job_days, max_jobs=args.max_jobs,
-                                   debug_dir=debug_dir)
-    except BrowserProblem as problem:
-        say(str(problem))
-        return 2
-    except ScrapeStopped as stop:
-        say(str(stop))
-        return 1
-    except KeyboardInterrupt:
-        if not (posts.items or jobs.items):
-            say("\nStopped. Nothing was collected.")
-            return 1
-        notes.append("Stopped with Ctrl+C.")
-
-    if posts.stopped:
-        notes.append(f"Post search stopped early: {posts.stopped}")
-    if jobs.stopped:
-        notes.append(f"Jobs search stopped early: {jobs.stopped}")
-    if args.skip_posts:
-        notes.append("Post search was skipped.")
-    if args.skip_jobs:
-        notes.append("Jobs search was skipped.")
-    elif posts.interrupted:
-        notes.append("Jobs search didn't run because the run was stopped.")
-    elif posts.blocked:
-        notes.append("Jobs search didn't run because LinkedIn pushed back. Try again in an hour or so.")
-
-    report = write_results(out_dir, job=job, location=location, run_at=now, post_hours=args.post_hours,
-                           job_days=args.job_days, posts=posts.items, jobs=jobs.items, now=now, notes=notes)
-    for note in notes:
-        say(note)
-    say(f"\nDone. {len(posts.items)} hiring posts, {len(jobs.items)} jobs.")
-    say(f"Saved in: {out_dir}")
-    if not args.no_open:
-        webbrowser.open(report.resolve().as_uri())
-    return 0
+    outcome = run_search(options_from_args(args, job, location), say)
+    return report_outcome(outcome, open_report=not args.no_open)
