@@ -1,6 +1,6 @@
 import io
 
-from peerpatch_linkedin.cli import clamp_limits, make_console_safe, parse_args, resolve_search
+from peerpatch_linkedin.cli import clamp_limits, job_and_location, make_console_safe, parse_args
 
 
 def test_defaults():
@@ -8,26 +8,6 @@ def test_defaults():
     assert (args.job, args.location) == (None, None)
     assert (args.max_posts, args.max_jobs, args.post_hours, args.job_days) == (100, 200, 48, 7)
     assert not (args.skip_posts or args.skip_jobs or args.debug or args.no_open)
-
-
-def test_job_flag_means_no_questions_and_india_by_default():
-    asked = []
-    assert resolve_search(parse_args(["--job", " data analyst "]), lambda q: asked.append(q) or "x") == ("data analyst", "India")
-    assert asked == []
-
-
-def test_asks_until_a_job_is_typed_then_defaults_location():
-    answers = iter(["", "   ", "data analyst", ""])
-    assert resolve_search(parse_args([]), lambda q: next(answers)) == ("data analyst", "India")
-
-
-def test_typed_location_is_kept():
-    answers = iter(["product manager", " Pune "])
-    assert resolve_search(parse_args([]), lambda q: next(answers)) == ("product manager", "Pune")
-
-
-def test_blank_location_flag_means_anywhere():
-    assert resolve_search(parse_args(["--job", "x", "--location", ""]), input) == ("x", "")
 
 
 def test_limits_are_clamped_with_a_message():
@@ -62,3 +42,19 @@ def test_options_from_args_carries_every_setting(tmp_path):
     assert (options.job, options.location, options.browser, options.max_posts, options.skip_jobs) == (
         "x", "Pune", "brave", 5, True)
     assert (options.profile_base, options.results_dir) == (tmp_path, tmp_path / "r")
+
+
+def test_job_and_location():
+    assert job_and_location(parse_args(["--job", " data analyst "])) == ("data analyst", "India")
+    assert job_and_location(parse_args(["--job", "x", "--location", " Pune "])) == ("x", "Pune")
+    assert job_and_location(parse_args(["--job", "x", "--location", ""])) == ("x", "")
+    assert job_and_location(parse_args([])) == ("", "India")
+
+
+def test_no_job_starts_the_web_page(monkeypatch, tmp_path):
+    from peerpatch_linkedin import cli
+
+    calls = []
+    monkeypatch.setattr(cli, "serve", lambda **kwargs: calls.append(kwargs) or 0)
+    assert cli.main(["--no-open", "--port", "9001", "--results-dir", str(tmp_path)]) == 0
+    assert calls[0]["port"] == 9001 and calls[0]["open_page"] is False and calls[0]["results_dir"] == tmp_path

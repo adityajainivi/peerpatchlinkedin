@@ -1,4 +1,4 @@
-"""Command line: run one search in the terminal."""
+"""Command line: no --job opens the web page; --job runs one search in the terminal."""
 from __future__ import annotations
 
 import argparse
@@ -10,6 +10,7 @@ from typing import Callable
 from . import config
 from .browsers import KEYS
 from .runner import MAX_POST_HOURS, RunOutcome, SearchOptions, run_search
+from .web import serve
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -38,16 +39,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def resolve_search(args: argparse.Namespace, ask: Callable[[str], str]) -> tuple[str, str]:
-    if args.job and args.job.strip():
-        location = "India" if args.location is None else args.location
-        return args.job.strip(), location.strip()
-    job = ""
-    while not job:
-        job = ask("Job title: ").strip()
-    if args.location is not None:
-        return job, args.location.strip()
-    return job, ask("Location (press Enter for India): ").strip() or "India"
+def job_and_location(args: argparse.Namespace) -> tuple[str, str]:
+    location = "India" if args.location is None else args.location
+    return (args.job or "").strip(), location.strip()
 
 
 def clamp_limits(args: argparse.Namespace, say: Callable[[str], None]) -> None:
@@ -94,14 +88,13 @@ def report_outcome(outcome: RunOutcome, open_report: bool) -> int:
     return outcome.exit_code
 
 
-def main(argv: list[str] | None = None, ask: Callable[[str], str] = input) -> int:
+def main(argv: list[str] | None = None) -> int:
     make_console_safe()
     args = parse_args(argv)
+    job, location = job_and_location(args)
+    if not job:
+        return serve(port=args.port, open_page=not args.no_open, results_dir=args.results_dir,
+                     profile_base=args.profile_dir, say=say)
     clamp_limits(args, say)
-    try:
-        job, location = resolve_search(args, ask)
-    except (EOFError, KeyboardInterrupt):
-        say("\nNo job title given. Nothing to do.")
-        return 2
     outcome = run_search(options_from_args(args, job, location), say)
     return report_outcome(outcome, open_report=not args.no_open)
