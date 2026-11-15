@@ -1,1 +1,325 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>PeerPatch LinkedIn</title></head><body><main><h1>LinkedIn job search</h1></main></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PeerPatch LinkedIn</title>
+<style>
+:root { --bg: #f7f6f2; --card: #ffffff; --text: #1d1d1b; --muted: #6b6a66; --line: #e2e0d9; --accent: #0a66c2; --accent-text: #ffffff; --soft: #e8f1fb; --warn: #fff4d6; --warn-line: #e7c66b; --bad: #fde8e8; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #161615; --card: #20201e; --text: #ecebe6; --muted: #a3a29c; --line: #34332f; --accent: #70b5f9; --accent-text: #0b1a2a; --soft: #1d2c3d; --warn: #3a3016; --warn-line: #8a6d1f; --bad: #3b1f1f; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 24px; margin: 0 0 4px; }
+h2 { font-size: 18px; margin: 28px 0 10px; }
+.sub { color: var(--muted); margin: 0 0 20px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+label { display: block; font-weight: 600; margin: 12px 0 4px; }
+input[type=text], input[type=number], select { width: 100%; padding: 10px 12px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 12px; }
+label.check { display: flex; gap: 8px; align-items: center; font-weight: 400; margin: 8px 0; }
+details { margin-top: 14px; }
+summary { cursor: pointer; color: var(--accent); }
+button, a.button { display: inline-block; font: inherit; padding: 10px 18px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; text-decoration: none; }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+button:disabled { opacity: 0.6; cursor: default; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; align-items: center; }
+.error { background: var(--bad); border-radius: 8px; padding: 10px 12px; margin: 12px 0; }
+.banner { background: var(--warn); border: 1px solid var(--warn-line); border-radius: 10px; padding: 12px 14px; font-weight: 600; margin: 12px 0; }
+.stage { font-size: 17px; font-weight: 600; margin: 0 0 8px; }
+#log { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; margin: 0; }
+.note { background: var(--soft); border-radius: 8px; padding: 8px 12px; margin: 6px 0; }
+iframe { display: block; width: 100%; height: 70vh; border: 1px solid var(--line); border-radius: 10px; margin-top: 16px; background: var(--card); }
+#runs { list-style: none; padding: 0; margin: 0; }
+#runs li { padding: 8px 0; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+#runs .name { font-weight: 600; overflow-wrap: anywhere; }
+.muted { color: var(--muted); }
+a { color: var(--accent); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>LinkedIn job search</h1>
+  <p class="sub">Hiring posts from the last 2 days and job listings from the last 7 days.</p>
+
+  <div id="no-token" class="error" hidden>Open the link from the PeerPatch terminal window. It ends in <code>?t=</code> and a code.</div>
+  <div id="gone" class="error" hidden>PeerPatch has stopped. Start it again from run.bat or run.command, then open the new link.</div>
+
+  <section id="form-view" hidden>
+    <form id="search" class="card" novalidate>
+      <label for="job">Job title</label>
+      <input id="job" type="text" placeholder="data analyst" autocomplete="off">
+      <label for="location">Location</label>
+      <input id="location" type="text" value="India">
+      <label for="browser">Browser</label>
+      <select id="browser"></select>
+      <details>
+        <summary>More options</summary>
+        <div class="row">
+          <div><label for="max_posts">Max posts</label><input id="max_posts" type="number" min="1" value="100"></div>
+          <div><label for="max_jobs">Max jobs</label><input id="max_jobs" type="number" min="1" value="200"></div>
+          <div><label for="post_hours">Post hours</label><input id="post_hours" type="number" min="1" max="168" value="48"></div>
+          <div><label for="job_days">Job days</label><input id="job_days" type="number" min="1" value="7"></div>
+        </div>
+        <label class="check"><input id="skip_posts" type="checkbox"> Skip posts</label>
+        <label class="check"><input id="skip_jobs" type="checkbox"> Skip jobs</label>
+        <label class="check"><input id="debug" type="checkbox"> Save raw pages (for fixing problems)</label>
+      </details>
+      <div class="actions"><button class="primary" type="submit">Start</button></div>
+      <div id="form-error" class="error" hidden></div>
+    </form>
+    <h2>Past runs</h2>
+    <ul id="runs"></ul>
+    <p id="no-runs" class="muted">No searches yet.</p>
+  </section>
+
+  <section id="running" class="card" hidden>
+    <p id="stage" class="stage">Getting the browser ready</p>
+    <div id="login-banner" class="banner" hidden></div>
+    <pre id="log"></pre>
+    <div class="actions">
+      <button id="stop" type="button">Stop</button>
+      <span id="stopping" class="muted" hidden>Stopping after the current step...</span>
+    </div>
+  </section>
+
+  <section id="done" hidden>
+    <div class="card">
+      <p id="summary" class="stage"></p>
+      <div id="notes"></div>
+      <div id="run-error" class="error" hidden></div>
+      <div class="actions">
+        <a id="dl-posts" class="button" download>Download posts.csv</a>
+        <a id="dl-jobs" class="button" download>Download jobs.csv</a>
+        <a id="open-report" class="button" target="_blank" rel="noopener">Open report in new tab</a>
+        <button id="again" class="primary" type="button">New search</button>
+      </div>
+    </div>
+    <iframe id="report-frame" title="Report"></iframe>
+  </section>
+</main>
+<script>
+(function () {
+  "use strict";
+  var token = new URLSearchParams(location.search).get("t");
+  var STAGES = {
+    "starting": "Getting the browser ready",
+    "downloading-browser": "Downloading the built-in browser (one time)",
+    "waiting-for-login": "Waiting for you to log in",
+    "posts": "Searching hiring posts",
+    "jobs": "Searching jobs",
+    "saving": "Saving",
+    "done": "Finishing"
+  };
+  var logSize = 0;
+  var polling = null;
+  var browserLabel = "browser";
+
+  function $(id) { return document.getElementById(id); }
+
+  function show(view) {
+    ["form-view", "running", "done"].forEach(function (id) { $(id).hidden = id !== view; });
+  }
+
+  function plural(n, word) { return n + " " + word + (n === 1 ? "" : "s"); }
+
+  function serverGone() {
+    if (polling) { clearInterval(polling); polling = null; }
+    $("gone").hidden = false;
+  }
+
+  function api(method, path, body) {
+    var options = { method: method, headers: { "X-PeerPatch-Token": token } };
+    if (body !== undefined) {
+      options.headers["Content-Type"] = "application/json";
+      options.body = JSON.stringify(body);
+    }
+    return fetch(path, options).then(function (response) {
+      return response.json().catch(function () { return {}; }).then(function (data) {
+        if (!response.ok) {
+          var error = new Error(data.error || ("HTTP " + response.status));
+          error.status = response.status;
+          throw error;
+        }
+        return data;
+      });
+    }, function (networkError) {
+      serverGone();
+      throw networkError;
+    });
+  }
+
+  function fileUrl(folder, name) {
+    return "/results/" + encodeURIComponent(folder) + "/" + name + "?t=" + encodeURIComponent(token);
+  }
+
+  function loadBrowsers() {
+    return api("GET", "/api/browsers").then(function (data) {
+      var select = $("browser");
+      select.textContent = "";
+      data.browsers.forEach(function (b) {
+        var option = document.createElement("option");
+        option.value = b.key;
+        option.dataset.label = b.label;
+        option.textContent = (b.key === "builtin" && !b.installed)
+          ? b.label + " (downloads once, about 150 MB)"
+          : b.label + " (installed)";
+        option.selected = b.key === data.default;
+        select.appendChild(option);
+      });
+    });
+  }
+
+  function loadRuns() {
+    return api("GET", "/api/runs").then(function (runs) {
+      var list = $("runs");
+      list.textContent = "";
+      $("no-runs").hidden = runs.length > 0;
+      runs.forEach(function (run) {
+        var item = document.createElement("li");
+        var name = document.createElement("span");
+        name.className = "name";
+        name.textContent = run.folder;
+        var counts = document.createElement("span");
+        counts.className = "muted";
+        counts.textContent = plural(run.posts, "post") + ", " + plural(run.jobs, "job");
+        item.appendChild(name);
+        item.appendChild(counts);
+        [["Report", "report.html"], ["posts.csv", "posts.csv"], ["jobs.csv", "jobs.csv"]].forEach(function (pair) {
+          var link = document.createElement("a");
+          link.textContent = pair[0];
+          link.href = fileUrl(run.folder, pair[1]);
+          if (pair[1] === "report.html") { link.target = "_blank"; link.rel = "noopener"; }
+          else { link.setAttribute("download", ""); }
+          item.appendChild(link);
+        });
+        list.appendChild(item);
+      });
+    });
+  }
+
+  function numberField(id) { return Number($(id).value); }
+
+  function startSearch(event) {
+    event.preventDefault();
+    $("form-error").hidden = true;
+    var select = $("browser");
+    var chosen = select.options[select.selectedIndex];
+    browserLabel = chosen ? chosen.dataset.label : "browser";
+    var body = {
+      job: $("job").value,
+      location: $("location").value,
+      browser: select.value,
+      max_posts: numberField("max_posts"),
+      max_jobs: numberField("max_jobs"),
+      post_hours: numberField("post_hours"),
+      job_days: numberField("job_days"),
+      skip_posts: $("skip_posts").checked,
+      skip_jobs: $("skip_jobs").checked,
+      debug: $("debug").checked
+    };
+    api("POST", "/api/start", body).then(beginRunning, function (error) {
+      if (error.status) {
+        $("form-error").textContent = error.message;
+        $("form-error").hidden = false;
+      }
+    });
+  }
+
+  function beginRunning() {
+    logSize = 0;
+    $("log").textContent = "";
+    $("stopping").hidden = true;
+    $("stop").disabled = false;
+    $("login-banner").hidden = true;
+    $("stage").textContent = STAGES.starting;
+    show("running");
+    if (!polling) { polling = setInterval(poll, 1000); }
+    poll();
+  }
+
+  function poll() {
+    api("GET", "/api/status?since=" + logSize).then(render, function () {});
+  }
+
+  function render(status) {
+    if (status.log.length) {
+      $("log").textContent += status.log.join("\n") + "\n";
+      $("log").scrollTop = $("log").scrollHeight;
+    }
+    logSize = status.log_size;
+    if (status.state === "running") {
+      $("stage").textContent = STAGES[status.stage] || STAGES.starting;
+      var waiting = status.stage === "waiting-for-login";
+      $("login-banner").hidden = !waiting;
+      if (waiting) {
+        $("login-banner").textContent = "Log in to LinkedIn in the " + browserLabel +
+          " window that just opened. The search starts by itself once you're in.";
+      }
+    } else if (status.state === "done" && polling) {
+      clearInterval(polling);
+      polling = null;
+      showDone(status.result);
+    }
+  }
+
+  function showDone(result) {
+    show("done");
+    var notes = $("notes");
+    notes.textContent = "";
+    (result.notes || []).forEach(function (text) {
+      var line = document.createElement("p");
+      line.className = "note";
+      line.textContent = text;
+      notes.appendChild(line);
+    });
+    var failed = !result.folder;
+    $("run-error").textContent = result.error || "";
+    $("run-error").hidden = !result.error;
+    $("summary").textContent = failed ? "Nothing was saved." :
+      plural(result.posts, "hiring post") + ", " + plural(result.jobs, "job");
+    ["dl-posts", "dl-jobs", "open-report", "report-frame"].forEach(function (id) { $(id).hidden = failed; });
+    if (failed) {
+      $("report-frame").removeAttribute("src");
+    } else {
+      $("dl-posts").setAttribute("href", fileUrl(result.folder, "posts.csv"));
+      $("dl-jobs").setAttribute("href", fileUrl(result.folder, "jobs.csv"));
+      $("open-report").setAttribute("href", fileUrl(result.folder, "report.html"));
+      $("report-frame").setAttribute("src", fileUrl(result.folder, "report.html"));
+    }
+    $("again").textContent = failed ? "Try again" : "New search";
+  }
+
+  $("search").addEventListener("submit", startSearch);
+  $("stop").addEventListener("click", function () {
+    $("stop").disabled = true;
+    $("stopping").hidden = false;
+    api("POST", "/api/stop").catch(function () {});
+  });
+  $("again").addEventListener("click", function () {
+    show("form-view");
+    loadRuns().catch(function () {});
+  });
+
+  if (!token) {
+    $("no-token").hidden = false;
+    return;
+  }
+  Promise.all([loadBrowsers(), loadRuns()]).then(function () {
+    return api("GET", "/api/status?since=0");
+  }).then(function (status) {
+    if (status.state === "running") {
+      show("running");
+      if (!polling) { polling = setInterval(poll, 1000); }
+      render(status);
+    } else {
+      show("form-view");
+    }
+  }).catch(function () {});
+})();
+</script>
+</body>
+</html>
