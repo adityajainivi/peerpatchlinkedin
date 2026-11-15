@@ -68,7 +68,7 @@ def _whole_number(payload: dict, name: str, default: int) -> int:
         raise ValueError(name)
     try:
         return int(value)
-    except ValueError:
+    except (ValueError, OverflowError):  # "abc", NaN, Infinity
         raise ValueError(name) from None
 
 
@@ -129,6 +129,7 @@ class App:
         self.run = run
         self.browsers = browsers
         self.state = RunState()
+        self._worker: threading.Thread | None = None
 
     def browsers_payload(self) -> dict:
         found = self.browsers()
@@ -141,7 +142,8 @@ class App:
             return 400, {"error": options}
         if not self.state.begin():
             return 409, {"error": "A search is already running. Wait for it to finish or press Stop."}
-        threading.Thread(target=self._work, args=(options,), daemon=True).start()
+        self._worker = threading.Thread(target=self._work, args=(options,), daemon=True)
+        self._worker.start()
         return 202, {"ok": True}
 
     def _work(self, options: SearchOptions) -> None:
@@ -156,12 +158,27 @@ class App:
         request_stop()
         return {"ok": True}
 
+    def stop_and_wait(self, say: Callable[[str], None], timeout: float = 60) -> None:
+        """The terminal is closing: stop any search and give it time to save what it collected."""
+        request_stop()
+        worker = self._worker
+        if worker is None or not worker.is_alive():
+            return
+        say("Stopping and saving what was collected...")
+        worker.join(timeout)
+        result = self.state.snapshot()["result"]
+        if result and result.get("folder"):
+            say(f"Saved in: {self.results_dir / result['folder']}")
+
 
 class _Server(ThreadingHTTPServer):
     daemon_threads = True
     # On Windows SO_REUSEADDR lets a second server bind the same port, so a second launch
     # would silently share it. Elsewhere it only skips TIME_WAIT, which is what we want.
     allow_reuse_address = not sys.platform.startswith("win")
+
+    def handle_error(self, request, client_address) -> None:
+        """A browser tab dropping a request (closed, reloaded) is normal. Keep tracebacks out of the terminal."""
 
 
 def make_handler(app: App):
@@ -283,8 +300,9 @@ def serve(*, port: int = 8765, open_page: bool = True, results_dir: Path, profil
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        say("\nStopped.")
+        say("")
     finally:
-        request_stop()
+        app.stop_and_wait(say)
         server.server_close()
+        say("Stopped.")
     return 0

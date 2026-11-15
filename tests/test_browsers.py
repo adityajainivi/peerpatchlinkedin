@@ -1,4 +1,5 @@
 import sys
+import time
 
 import pytest
 
@@ -88,3 +89,13 @@ def test_install_builtin_streams_output_and_reports_failure():
     assert lines == ["  Downloading Chromium", "  50%", "  100%"]
     with pytest.raises(BrowserDownloadFailed, match="Check your internet connection"):
         install_builtin(lines.append, command=[sys.executable, "-c", "import sys; sys.exit(3)"])
+
+
+def test_install_builtin_stops_when_asked():
+    lines = []
+    started = time.monotonic()
+    done = install_builtin(lines.append, should_stop=lambda: len(lines) >= 1, command=[
+        sys.executable, "-c", "import time\nfor i in range(50):\n    print(i, flush=True)\n    time.sleep(0.2)"])
+    assert done is False
+    assert lines == ["  0"]
+    assert time.monotonic() - started < 5

@@ -106,20 +106,33 @@ def launch_options(info: BrowserInfo) -> dict:
     return {"executable_path": info.path} if info.path else {}
 
 
-def install_builtin(say: Callable[[str], None], command: list[str] | None = None) -> None:
-    """Download Playwright's Chromium, passing its progress lines to `say`."""
+def install_builtin(say: Callable[[str], None], command: list[str] | None = None,
+                    should_stop: Callable[[], bool] | None = None) -> bool:
+    """Download Playwright's Chromium, passing its progress lines to `say`.
+
+    Returns False if `should_stop` turned true and the download was abandoned, True when it finished.
+    """
     command = command or [sys.executable, "-m", "playwright", "install", "chromium"]
+    should_stop = should_stop or (lambda: False)
     try:
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                                    errors="replace")
     except OSError:
         raise BrowserDownloadFailed(_DOWNLOAD_FAILED) from None
     for line in process.stdout:  # text mode splits on \r too, so progress updates arrive as lines
+        if should_stop():
+            process.terminate()
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+            return False
         line = line.strip()
         if line:
             say(f"  {line}")
     if process.wait() != 0:
         raise BrowserDownloadFailed(_DOWNLOAD_FAILED)
+    return True
 
 
 def profile_dir_for(base: Path, key: str) -> Path:

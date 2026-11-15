@@ -1,5 +1,6 @@
 import socket
 import threading
+import time
 
 import pytest
 
@@ -126,3 +127,40 @@ def test_busy_port_moves_to_the_next_one(tmp_path):
             httpd.server_close()
     finally:
         blocker.close()
+
+
+def test_closing_the_terminal_mid_run_lets_the_search_save(tmp_path):
+    def slow_run(options, say, stage):
+        stage("posts")
+        deadline = time.monotonic() + 10
+        while not stop_requested() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        return fake_run()(options, say, stage)
+
+    app = App(token=TOKEN, results_dir=tmp_path / "results", profile_base=tmp_path, run=slow_run,
+              browsers=fake_browsers)
+    try:
+        assert app.start({"job": "data analyst"})[0] == 202
+        said = []
+        app.stop_and_wait(said.append, timeout=5)
+        assert (tmp_path / "results" / FOLDER / "posts.csv").is_file()
+        assert said == ["Stopping and saving what was collected...", f"Saved in: {tmp_path / 'results' / FOLDER}"]
+    finally:
+        clear_stop()
+
+
+def test_infinity_is_refused_politely(web):
+    assert web.json("POST", "/api/start", b'{"job": "x", "max_posts": Infinity}') == (
+        400, {"error": "'max_posts' must be a whole number."})
+
+
+def test_request_errors_stay_out_of_the_terminal(tmp_path, capsys):
+    httpd = make_server(make_app(tmp_path), 0)
+    try:
+        try:
+            raise ConnectionAbortedError("the browser went away")
+        except ConnectionAbortedError:
+            httpd.handle_error(None, ("127.0.0.1", 50000))
+    finally:
+        httpd.server_close()
+    assert capsys.readouterr().err == ""

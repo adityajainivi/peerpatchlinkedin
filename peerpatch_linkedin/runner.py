@@ -9,7 +9,7 @@ from typing import Callable
 from . import config
 from .browser import (
     BrowserProblem, Cancelled, ScrapeResult, ScrapeStopped, Say, clear_stop, ensure_logged_in, first_line,
-    open_browser,
+    open_browser, stop_requested,
 )
 from .browsers import (
     BrowserDownloadFailed, BrowserInfo, BrowserNotFound, choose_browser, find_browsers, install_builtin,
@@ -87,10 +87,15 @@ def run_search(options: SearchOptions, say: Say, stage: Stage = lambda name: Non
         if info.key == "builtin" and not info.installed:
             stage("downloading-browser")
             say("Downloading the built-in browser. This happens once and can take a few minutes...")
-            install_builtin(say)
+            if not install_builtin(say, should_stop=stop_requested):
+                raise Cancelled()
+        if stop_requested():
+            raise Cancelled()
         say(f"Searching LinkedIn for: {job} ({location or 'anywhere'}), using {info.label}")
         with open_browser(info, profile_dir_for(options.profile_base, info.key)) as page:
             ensure_logged_in(page, say, label=info.label, on_wait=lambda: stage("waiting-for-login"))
+            if stop_requested():
+                raise Cancelled()
             if not options.skip_posts:
                 stage("posts")
                 say(f"Hiring posts from the last {options.post_hours} hours...")
