@@ -1,8 +1,9 @@
-"""Everything that touches Chrome: launch, login, walls, waits and in-page scripts."""
+"""Everything that touches the browser: launch, login, walls, waits, stopping and in-page scripts."""
 from __future__ import annotations
 
 import os
 import random
+import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -15,16 +16,22 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
 from . import config
+from .browsers import BrowserInfo, launch_options
 
 Say = Callable[[str], None]
+_stop = threading.Event()
 
 
 class ScrapeStopped(Exception):
     """LinkedIn put up a wall we can't get past. The message says which."""
 
 
-class ChromeProblem(Exception):
-    """Chrome wouldn't start. The message tells the person what to do."""
+class BrowserProblem(Exception):
+    """The browser wouldn't start. The message tells the person what to do."""
+
+
+class Cancelled(Exception):
+    """The person pressed Stop on the web page."""
 
 
 @dataclass
@@ -33,6 +40,18 @@ class ScrapeResult:
     stopped: str | None = None
     interrupted: bool = False
     blocked: bool = False  # LinkedIn pushed back (login wall, unsolved check, closed window): don't keep going
+
+
+def request_stop() -> None:
+    _stop.set()
+
+
+def clear_stop() -> None:
+    _stop.clear()
+
+
+def stop_requested() -> bool:
+    return _stop.is_set()
 
 
 def first_line(err: BaseException) -> str:
@@ -50,28 +69,28 @@ def classify_url(url: str) -> str:
     return "ok"
 
 
-def explain_launch_error(message: str, profile_dir: Path) -> str:
+def explain_launch_error(message: str, profile_dir: Path, label: str = "Chrome") -> str:
     text = message.lower()
     if "is not found" in text or "executable doesn't exist" in text:
-        return "Google Chrome isn't installed. Install it from https://www.google.com/chrome/ and run this again."
+        return f"{label} couldn't be found on this computer. Pick another browser and try again."
     if any(os.path.lexists(profile_dir / name) for name in ("SingletonLock", "lockfile")):
-        return "Another PeerPatch Chrome window is already open. Close it and run this again."
-    return f"Chrome wouldn't start: {first_line(Exception(message))}"
+        return f"Another PeerPatch {label} window is already open. Close it and run this again."
+    return f"{label} wouldn't start: {first_line(Exception(message))}"
 
 
 @contextmanager
-def open_chrome(profile_dir: Path) -> Iterator:
+def open_browser(info: BrowserInfo, profile_dir: Path) -> Iterator:
     profile_dir.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as playwright:
         try:
             context = playwright.chromium.launch_persistent_context(
                 str(profile_dir),
-                channel="chrome",
                 headless=config.HEADLESS,
                 no_viewport=not config.HEADLESS,
+                **launch_options(info),
             )
         except PlaywrightError as err:
-            raise ChromeProblem(explain_launch_error(str(err), profile_dir)) from None
+            raise BrowserProblem(explain_launch_error(str(err), profile_dir, info.label)) from None
         try:
             yield context.pages[0] if context.pages else context.new_page()
         finally:
@@ -106,10 +125,19 @@ def open_url(page, url: str) -> int:
 
 
 def pause(page, seconds: float) -> None:
-    try:
-        page.wait_for_timeout(max(0.0, seconds) * 1000)
-    except PlaywrightError:
-        raise ScrapeStopped("The Chrome window was closed.") from None
+    """Wait, in steps of 0.2 seconds so Stop takes effect quickly."""
+    remaining = max(0.0, seconds)
+    while True:
+        if _stop.is_set():
+            raise Cancelled()
+        if remaining <= 0:
+            return
+        step = min(0.2, remaining)
+        try:
+            page.wait_for_timeout(step * 1000)
+        except PlaywrightError:
+            raise ScrapeStopped("The browser window was closed.") from None
+        remaining -= step
 
 
 def polite_wait(page) -> None:
@@ -131,7 +159,8 @@ def _minutes(seconds: float) -> int:
     return max(1, round(seconds / 60))
 
 
-def ensure_logged_in(page, say: Say, timeout: float | None = None, poll: float = 2.0) -> None:
+def ensure_logged_in(page, say: Say, *, label: str = "Chrome", on_wait: Callable[[], None] | None = None,
+                     timeout: float | None = None, poll: float = 2.0) -> None:
     timeout = config.LOGIN_TIMEOUT_SECONDS if timeout is None else timeout
     try:
         page.goto(f"{config.BASE_URL}/feed/", wait_until="domcontentloaded")
@@ -139,11 +168,13 @@ def ensure_logged_in(page, say: Say, timeout: float | None = None, poll: float =
         raise ScrapeStopped(f"Couldn't open LinkedIn: {first_line(err)}") from None
     if is_logged_in(page):
         return
-    say("Log in to LinkedIn in the Chrome window, then come back here.")
+    say(f"Log in to LinkedIn in the {label} window, then come back here.")
     say("Use your LinkedIn email and password. This window doesn't have your saved passwords, and")
     say("'Continue with Google' or Apple may be blocked in it. Ignore the 'controlled by automated")
     say("test software' bar at the top; that's this tool.")
     say(f"Waiting up to {_minutes(timeout)} minutes...")
+    if on_wait:
+        on_wait()
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         pause(page, poll)
@@ -164,7 +195,7 @@ def check_for_walls(page, say: Say, timeout: float | None = None, poll: float = 
     if kind == "login":
         raise ScrapeStopped("LinkedIn showed a login wall partway through.")
     timeout = config.CHALLENGE_TIMEOUT_SECONDS if timeout is None else timeout
-    say(f"LinkedIn wants a security check. Solve it in the Chrome window. Waiting up to {_minutes(timeout)} minutes...")
+    say(f"LinkedIn wants a security check. Solve it in the browser window. Waiting up to {_minutes(timeout)} minutes...")
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         pause(page, poll)

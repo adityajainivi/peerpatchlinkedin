@@ -9,8 +9,8 @@ from playwright.sync_api import Error as PlaywrightError
 
 from . import config
 from .browser import (
-    ScrapeResult, ScrapeStopped, Say, check_for_walls, first_line, open_url, pause, polite_wait, run_extract,
-    save_debug,
+    Cancelled, ScrapeResult, ScrapeStopped, Say, check_for_walls, first_line, open_url, pause, polite_wait,
+    run_extract, save_debug,
 )
 
 
@@ -91,7 +91,9 @@ def scrape_jobs(page, job: str, location: str, *, say: Say, days: int = 7, max_j
     except ScrapeStopped as stop:
         return result(str(stop))
     except PlaywrightError as err:
-        return result(f"Chrome had a problem during the jobs search: {first_line(err)}")
+        return result(f"The browser had a problem during the jobs search: {first_line(err)}")
+    except Cancelled:
+        return result("Stopped from the page.", interrupted=True)
     except KeyboardInterrupt:
         return result("Stopped with Ctrl+C.", interrupted=True)
     return result()

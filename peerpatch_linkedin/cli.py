@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Callable
 
 from . import config
-from .browser import ChromeProblem, ScrapeResult, ScrapeStopped, ensure_logged_in, open_chrome
+from .browser import BrowserProblem, ScrapeResult, ScrapeStopped, ensure_logged_in, open_browser
+from .browsers import choose_browser, find_browsers, profile_dir_for
 from .jobs import scrape_jobs
 from .posts import scrape_posts
 from .report import results_dir, write_results
@@ -91,8 +92,9 @@ def main(argv: list[str] | None = None, ask: Callable[[str], str] = input) -> in
 
     say(f"Searching LinkedIn for: {job} ({location or 'anywhere'})")
     try:
-        with open_chrome(args.profile_dir) as page:
-            ensure_logged_in(page, say)
+        info = choose_browser("auto", find_browsers())
+        with open_browser(info, profile_dir_for(args.profile_dir, info.key)) as page:
+            ensure_logged_in(page, say, label=info.label)
             if not args.skip_posts:
                 say(f"Hiring posts from the last {args.post_hours} hours...")
                 posts = scrape_posts(page, job, say=say, max_hours=args.post_hours, max_posts=args.max_posts,
@@ -101,7 +103,7 @@ def main(argv: list[str] | None = None, ask: Callable[[str], str] = input) -> in
                 say(f"Jobs from the last {args.job_days} days...")
                 jobs = scrape_jobs(page, job, location, say=say, days=args.job_days, max_jobs=args.max_jobs,
                                    debug_dir=debug_dir)
-    except ChromeProblem as problem:
+    except BrowserProblem as problem:
         say(str(problem))
         return 2
     except ScrapeStopped as stop:

@@ -21,15 +21,15 @@ def test_classify_url(url, kind):
     assert classify_url(url) == kind
 
 
-def test_missing_chrome_is_explained(tmp_path):
-    msg = explain_launch_error("Chromium distribution 'chrome' is not found at /opt/google/chrome/chrome", tmp_path)
-    assert "https://www.google.com/chrome/" in msg
+def test_missing_browser_is_explained(tmp_path):
+    msg = explain_launch_error("Chromium distribution 'chrome' is not found at /x", tmp_path, "Edge")
+    assert msg == "Edge couldn't be found on this computer. Pick another browser and try again."
 
 
 def test_profile_in_use_is_explained(tmp_path):
     os.symlink("somehost-1234", tmp_path / "SingletonLock")  # dangling, the way Chrome leaves it
-    msg = explain_launch_error("Target page, context or browser has been closed", tmp_path)
-    assert "already open" in msg
+    msg = explain_launch_error("Target page, context or browser has been closed", tmp_path, "Brave")
+    assert msg == "Another PeerPatch Brave window is already open. Close it and run this again."
 
 
 def test_other_launch_errors_keep_their_first_line(tmp_path):

@@ -10,7 +10,7 @@ from playwright.sync_api import Error as PlaywrightError
 
 from . import config
 from .browser import (
-    ScrapeResult, ScrapeStopped, Say, check_for_walls, first_line, polite_wait, run_extract, save_debug,
+    Cancelled, ScrapeResult, ScrapeStopped, Say, check_for_walls, first_line, polite_wait, run_extract, save_debug,
 )
 from .filters import is_hiring_post
 from .filters import mentions_title as _mentions_title
@@ -146,7 +146,9 @@ def scrape_posts(page, job: str, *, say: Say, max_hours: float = 48, max_posts: 
         save_debug(page, debug_dir, "posts-stopped")
         return result(str(stop), blocked=True)
     except PlaywrightError as err:
-        return result(f"Chrome had a problem during the post search: {first_line(err)}")
+        return result(f"The browser had a problem during the post search: {first_line(err)}")
+    except Cancelled:
+        return result("Stopped from the page.", interrupted=True)
     except KeyboardInterrupt:
         return result("Stopped with Ctrl+C.", interrupted=True)
     return result()
