@@ -39,3 +39,20 @@ def test_other_launch_errors_keep_their_first_line(tmp_path):
 def test_first_line():
     assert first_line(RuntimeError("one\ntwo")) == "one"
     assert first_line(RuntimeError("")) == "unknown error"
+
+
+def test_open_url_reports_http_errors_that_have_empty_bodies(page):
+    from peerpatch_linkedin.browser import open_url
+    from tests.fake_linkedin import FakeLinkedIn
+
+    fake = FakeLinkedIn()
+    fake.route("/ok", lambda q: (200, "<p>fine</p>", {}))
+    fake.route("/busy", lambda q: (429, "", {}))
+    fake.route("/refused", lambda q: (999, "", {}))
+    base = fake.start()
+    try:
+        assert open_url(page, f"{base}/ok") == 200
+        assert open_url(page, f"{base}/busy") == 429
+        assert open_url(page, f"{base}/refused") == 999
+    finally:
+        fake.stop()

@@ -9,7 +9,8 @@ from playwright.sync_api import Error as PlaywrightError
 
 from . import config
 from .browser import (
-    ScrapeResult, ScrapeStopped, Say, check_for_walls, first_line, pause, polite_wait, run_extract, save_debug,
+    ScrapeResult, ScrapeStopped, Say, check_for_walls, first_line, open_url, pause, polite_wait, run_extract,
+    save_debug,
 )
 
 
@@ -61,8 +62,7 @@ def scrape_jobs(page, job: str, location: str, *, say: Say, days: int = 7, max_j
     retried = False
     try:
         for page_number in range(1, config.MAX_JOB_PAGES + 1):
-            response = page.goto(build_jobs_url(job, location, days, start), wait_until="domcontentloaded")
-            problem = status_problem(response.status if response else 200)
+            problem = status_problem(open_url(page, build_jobs_url(job, location, days, start)))
             if problem == "retry":
                 if retried:
                     return result("LinkedIn is rate-limiting the jobs search (HTTP 429). Try again in an hour.")

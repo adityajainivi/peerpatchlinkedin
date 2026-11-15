@@ -80,6 +80,30 @@ def open_chrome(profile_dir: Path) -> Iterator:
                 pass
 
 
+def open_url(page, url: str) -> int:
+    """Go to a URL and return the HTTP status.
+
+    When a server answers an error code with an empty body, Chrome shows its own error page and
+    Playwright raises instead of returning the response. The status is read from the response event.
+    """
+    statuses: list[int] = []
+
+    def on_response(response) -> None:
+        if response.request.is_navigation_request() and response.frame == page.main_frame:
+            statuses.append(response.status)
+
+    page.on("response", on_response)
+    try:
+        response = page.goto(url, wait_until="domcontentloaded")
+        return response.status if response else (statuses[-1] if statuses else 200)
+    except PlaywrightError:
+        if statuses:
+            return statuses[-1]
+        raise
+    finally:
+        page.remove_listener("response", on_response)
+
+
 def pause(page, seconds: float) -> None:
     try:
         page.wait_for_timeout(max(0.0, seconds) * 1000)
