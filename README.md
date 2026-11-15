@@ -23,7 +23,12 @@ On the GitHub page, click the green **Code** button, then **Download ZIP**. Unzi
 
 **Windows:** double-click `run.bat`. If Windows shows a blue "Windows protected your PC" box, click **More info**, then **Run anyway**.
 
-**Mac:** right-click `run.command` and choose **Open**, then **Open** again. You only need the right-click the first time, because the file doesn't come from the App Store. After that a double-click works.
+**Mac:** macOS blocks scripts downloaded from the internet, so a double-click shows "run.command Not Opened". Click **Done** (not Move to Bin), then use either way below.
+
+- **Through Terminal (easiest).** Press Cmd+Space, type `Terminal`, press Enter. Type `bash` and a space, drag `run.command` from Finder into the Terminal window, and press Enter. Do this every time you run it.
+- **Allow it once.** Open System Settings, then Privacy & Security. Scroll down to "run.command was blocked" and click **Open Anyway**, then enter your Mac password. Double-click `run.command` again and choose **Open Anyway**. After that a double-click works.
+
+If a box asks to install "command line developer tools", click **Install**, wait for it to finish, and run the tool again. That's Apple's Python setup.
 
 The first run sets itself up. That takes about a minute and needs internet.
 
