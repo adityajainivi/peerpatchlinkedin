@@ -132,10 +132,11 @@ def test_no_login_in_time_saves_nothing(fake, tmp_path, browser):
     run = run_tool(fake.start(), tmp_path, PEERPATCH_LOGIN_TIMEOUT="1")
     assert run.returncode == 1
     assert "Log in to LinkedIn in the Chrome window" in run.stdout
+    assert "LinkedIn email and password" in run.stdout
     assert not (tmp_path / "results").exists()
 
 
-def test_login_wall_on_posts_still_collects_jobs(fake, tmp_path, browser):
+def test_login_wall_on_posts_stops_the_whole_run(fake, tmp_path, browser):
     fake.route("/feed/", OK(FEED))
     fake.route("/search/results/content/", REDIRECT("/authwall"))
     fake.route("/authwall", OK("<!doctype html><title>Sign in</title>"))
@@ -145,8 +146,11 @@ def test_login_wall_on_posts_still_collects_jobs(fake, tmp_path, browser):
 
     out = only_results_folder(tmp_path)
     assert read_csv(out / "posts.csv") == []
-    assert len(read_csv(out / "jobs.csv")) == 24
-    assert "Post search stopped early: LinkedIn showed a login wall" in (out / "report.html").read_text(encoding="utf-8")
+    assert read_csv(out / "jobs.csv") == []
+    assert not any(path.startswith("/jobs-guest/") for path, _ in fake.requests)
+    report = (out / "report.html").read_text(encoding="utf-8")
+    assert "Post search stopped early: LinkedIn showed a login wall" in report
+    assert "Jobs search didn&#x27;t run because LinkedIn pushed back" in report
 
 
 def test_skip_jobs_and_debug_pages(fake, tmp_path, browser):

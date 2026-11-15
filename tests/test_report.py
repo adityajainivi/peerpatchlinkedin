@@ -55,7 +55,11 @@ def test_excel_formulas_are_neutralised():
     assert excel_safe("+91 98765 43210") == "'+91 98765 43210"
     assert excel_safe("@channel") == "'@channel"
     assert excel_safe("-2+3") == "'-2+3"
-    assert excel_safe("- bullet point") == "- bullet point"
+    assert excel_safe("- 2+3") == "'- 2+3"
+    assert excel_safe("- 0+WEBSERVICE(1)") == "'- 0+WEBSERVICE(1)"
+    assert excel_safe("- bullet point") == "'- bullet point"
+    assert excel_safe("-5") == "-5"
+    assert excel_safe("-0.1") == "-0.1"
     assert excel_safe(52) == "52"
     assert excel_safe(None) == ""
 

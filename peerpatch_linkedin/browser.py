@@ -32,6 +32,7 @@ class ScrapeResult:
     items: list = field(default_factory=list)
     stopped: str | None = None
     interrupted: bool = False
+    blocked: bool = False  # LinkedIn pushed back (login wall, unsolved check, closed window): don't keep going
 
 
 def first_line(err: BaseException) -> str:
@@ -138,7 +139,11 @@ def ensure_logged_in(page, say: Say, timeout: float | None = None, poll: float =
         raise ScrapeStopped(f"Couldn't open LinkedIn: {first_line(err)}") from None
     if is_logged_in(page):
         return
-    say(f"Log in to LinkedIn in the Chrome window, then come back here. Waiting up to {_minutes(timeout)} minutes...")
+    say("Log in to LinkedIn in the Chrome window, then come back here.")
+    say("Use your LinkedIn email and password. This window doesn't have your saved passwords, and")
+    say("'Continue with Google' or Apple may be blocked in it. Ignore the 'controlled by automated")
+    say("test software' bar at the top; that's this tool.")
+    say(f"Waiting up to {_minutes(timeout)} minutes...")
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         pause(page, poll)

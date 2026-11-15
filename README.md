@@ -32,12 +32,6 @@ If a box asks to install "command line developer tools", click **Install**, wait
 
 The first run sets itself up. That takes about a minute and needs internet.
 
-### First time only: log in
-
-A Chrome window opens on LinkedIn. Log in there, the normal way. The terminal waits up to 5 minutes for you.
-
-Your login is saved in a folder called `chrome-profile` inside the tool's folder, so next time you won't be asked. The tool never sees or stores your password. To log the tool out for good, delete that folder.
-
 ### Answer two questions
 
 ```
@@ -45,7 +39,17 @@ Job title: data analyst
 Location (press Enter for India): Bengaluru
 ```
 
-Then leave it alone. The Chrome window scrolls and clicks on its own, with short pauses so it doesn't hammer LinkedIn. A normal run takes 2 to 5 minutes.
+### First time only: log in
+
+Next, a Chrome window opens on LinkedIn. Log in there. The terminal waits up to 5 minutes for you.
+
+- **Use your LinkedIn email and password.** This Chrome window is separate from your normal Chrome, so it doesn't have your saved passwords.
+- **"Continue with Google" or Apple may not work here.** Google blocks sign-in from browsers that a program is controlling. If you normally sign in to LinkedIn with Google and don't know your LinkedIn password, set one first: on linkedin.com, click "Forgot password" and follow the email.
+- **A bar saying "Chrome is being controlled by automated test software" is normal.** That's this tool.
+
+Your login is saved in a folder called `chrome-profile` inside the tool's folder, so next time you won't be asked. The tool never sees or stores your password. To log the tool out for good, delete that folder.
+
+After that, leave it alone. The Chrome window scrolls and clicks on its own, with short pauses so it doesn't hammer LinkedIn. A normal run takes 2 to 5 minutes.
 
 ## What you get
 
@@ -91,9 +95,9 @@ run.bat --job "product manager" --location "" --skip-posts
 
 **"Another PeerPatch Chrome window is already open."** You started the tool twice. Close the other Chrome window it opened and try again.
 
-**"LinkedIn wants a security check."** LinkedIn sometimes asks you to prove you're a person. Do the check in the Chrome window. The tool waits 5 minutes, then carries on.
+**"LinkedIn wants a security check."** LinkedIn sometimes asks you to prove you're a person. Do the check in the Chrome window and the tool carries on. If it isn't done within 5 minutes, the tool stops, saves what it has, and skips the rest of the run.
 
-**"LinkedIn showed a login wall" or "rate-limiting".** LinkedIn has had enough for now. Whatever was collected before that is still saved, and the report says what happened. Try again in an hour or so.
+**"LinkedIn showed a login wall" or "rate-limiting".** LinkedIn has had enough for now. The tool stops instead of pushing on, so your account doesn't look worse. Whatever was collected before that is still saved, and the report says what happened. Try again in an hour or so.
 
 **Zero posts, when you know there are some.** LinkedIn may have changed its page layout. Run it again with `--debug` and send the `debug` folder from the results to whoever maintains this tool. It holds the raw pages, which show what changed.
 

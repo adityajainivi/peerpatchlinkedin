@@ -27,10 +27,14 @@ def results_dir(root: Path, job: str, location: str, when: datetime) -> Path:
     return candidate
 
 
+_PLAIN_NUMBER = re.compile(r"^-?\d+(?:\.\d+)?$")
+
+
 def excel_safe(value) -> str:
-    """Stop Excel from treating a cell as a formula."""
+    """Stop Excel from treating a cell as a formula. Excel ignores spaces after a leading minus, so any
+    leading dash is escaped unless the cell is a plain number."""
     text = "" if value is None else str(value)
-    if text[:1] in ("=", "+", "@", "\t", "\r") or (text[:1] == "-" and text[1:2] not in ("", " ")):
+    if text[:1] in ("=", "+", "@", "\t", "\r") or (text[:1] == "-" and not _PLAIN_NUMBER.match(text)):
         return "'" + text
     return text
 

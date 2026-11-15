@@ -32,6 +32,7 @@ def post_standard(urn, author, headline, profile_url, time_label, text, reaction
           <a class="update-components-actor__meta-link" href="{profile}">
             <span class="update-components-actor__title">
               <span class="hoverable-link-text t-14 t-bold"><span dir="ltr"><span aria-hidden="true"><!---->{_e(author)}<!----></span><span class="visually-hidden"><!---->View {_e(author)}'s profile<!----></span></span></span>
+              <span class="update-components-actor__supplementary-actor-info t-14 t-normal t-black--light"><span aria-hidden="true">&nbsp;&nbsp;•&nbsp;3rd+</span><span class="visually-hidden">Third degree connection</span></span>
             </span>
             <span class="update-components-actor__description text-body-xsmall t-black--light">
               <span aria-hidden="true"><!---->{_e(headline)}<!----></span><span class="visually-hidden"><!---->{_e(headline)}<!----></span>
@@ -171,4 +172,22 @@ def job_card_anchor(job_id, title, company, location, date, label):
       </div>
     </div>
   </a>
+</li>"""
+
+
+def post_reshare(urn, original_urn, author, profile_url, text, original_text):
+    """A repost: the original post sits inside the reposter's card, with its own ID."""
+    return f"""
+<li class="artdeco-card mb2">
+  <div class="feed-shared-update-v2" data-urn="{urn}" role="article">
+    <div class="update-components-actor"><a class="update-components-actor__meta-link" href="{profile_url}">
+      <span class="update-components-actor__title"><span dir="ltr"><span aria-hidden="true">{_e(author)}</span></span></span>
+    </a></div>
+    <div class="update-components-text"><span dir="ltr">{_text_html(text)}</span></div>
+    <div class="feed-shared-update-v2__content">
+      <div class="update-components-mini-update-v2" data-urn="{original_urn}">
+        <span dir="ltr">{_text_html(original_text)}</span>
+      </div>
+    </div>
+  </div>
 </li>"""

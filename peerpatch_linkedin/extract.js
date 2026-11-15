@@ -4,7 +4,8 @@
 function peerpatchText(el, keepLines) {
   if (!el) return "";
   const copy = el.cloneNode(true);
-  copy.querySelectorAll("button, .visually-hidden, script, style, svg").forEach((n) => n.remove());
+  copy.querySelectorAll("button, .visually-hidden, script, style, svg, .update-components-actor__supplementary-actor-info")
+    .forEach((n) => n.remove());
   if (keepLines) {
     copy.querySelectorAll("br").forEach((br) => br.replaceWith("\n"));
     copy.querySelectorAll("p, li, div").forEach((block) => block.append("\n"));
@@ -49,6 +50,7 @@ function peerpatchExtractPosts() {
   const found = new Map(); // urn -> container element
 
   for (const el of document.querySelectorAll("[data-urn], [data-chameleon-result-urn], [data-id]")) {
+    if ([...found.values()].some((box) => box !== el && box.contains(el))) continue;
     for (const name of ["data-urn", "data-chameleon-result-urn", "data-id"]) {
       const value = el.getAttribute(name);
       if (value && exact.test(value)) {
@@ -77,6 +79,7 @@ function peerpatchExtractPosts() {
     ]);
     let author = peerpatchText(peerpatchPick(box, [".update-components-actor__title", ".update-components-actor__name"]));
     if (!author && actorLink) author = peerpatchText(actorLink).slice(0, 100);
+    author = author.replace(/\s*[•·]\s*(?:1st|2nd|3rd\+?|Following)\s*$/i, "").trim();
 
     let textEl = peerpatchPick(box, [
       ".update-components-text", ".feed-shared-inline-show-more-text", ".feed-shared-text", '[class*="commentary"]',

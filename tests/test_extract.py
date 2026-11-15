@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from peerpatch_linkedin.browser import run_extract
 from tests.linkedin_markup import (
-    job_card, job_card_anchor, post_link_only, post_minimal, post_standard, search_page, urn_for,
+    job_card, job_card_anchor, post_link_only, post_minimal, post_reshare, post_standard, search_page, urn_for,
 )
 
 WHEN = datetime(2026, 11, 14, 9, 30, tzinfo=timezone.utc)
@@ -32,6 +32,16 @@ def test_reads_all_three_post_shapes(page):
     assert (posts[b]["reactions"], posts[b]["comments"]) == (52, 0)
     assert posts[c]["author"] == "Karan Mehta"
     assert posts[c]["text"] == "Hiring: Data Analyst intern."
+
+
+def test_repost_counts_once_and_keeps_the_reposters_text(page):
+    outer = urn_for(WHEN, salt=7)
+    original = urn_for(datetime(2026, 10, 25, tzinfo=timezone.utc), salt=8)  # 20 days older
+    page.set_content(search_page([post_reshare(outer, original, "Ravi Rao", "https://www.linkedin.com/in/ravi",
+                                               "Reposting for visibility: we're hiring!", "Data Analyst opening")]))
+    posts = run_extract(page, "peerpatchExtractPosts")
+    assert [p["urn"] for p in posts] == [outer]
+    assert posts[0]["text"] == "Reposting for visibility: we're hiring!"
 
 
 def test_empty_results_page_gives_no_posts(page):

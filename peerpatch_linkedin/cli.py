@@ -97,7 +97,7 @@ def main(argv: list[str] | None = None, ask: Callable[[str], str] = input) -> in
                 say(f"Hiring posts from the last {args.post_hours} hours...")
                 posts = scrape_posts(page, job, say=say, max_hours=args.post_hours, max_posts=args.max_posts,
                                      debug_dir=debug_dir, now=now)
-            if not args.skip_jobs and not posts.interrupted:
+            if not args.skip_jobs and not posts.interrupted and not posts.blocked:
                 say(f"Jobs from the last {args.job_days} days...")
                 jobs = scrape_jobs(page, job, location, say=say, days=args.job_days, max_jobs=args.max_jobs,
                                    debug_dir=debug_dir)
@@ -123,6 +123,8 @@ def main(argv: list[str] | None = None, ask: Callable[[str], str] = input) -> in
         notes.append("Jobs search was skipped.")
     elif posts.interrupted:
         notes.append("Jobs search didn't run because the run was stopped.")
+    elif posts.blocked:
+        notes.append("Jobs search didn't run because LinkedIn pushed back. Try again in an hour or so.")
 
     report = write_results(out_dir, job=job, location=location, run_at=now, post_hours=args.post_hours,
                            job_days=args.job_days, posts=posts.items, jobs=jobs.items, now=now, notes=notes)

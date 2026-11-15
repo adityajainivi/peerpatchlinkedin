@@ -70,19 +70,29 @@ def to_post(raw: dict, job: str, now: datetime) -> Post | None:
     )
 
 
-def select_posts(raws: list[dict], job: str, now: datetime, max_hours: float) -> tuple[list[Post], float | None]:
-    """Keep recent hiring posts. Also return the age of the oldest post seen, so the caller knows when to stop."""
+def select_posts(raws: list[dict], job: str, now: datetime, max_hours: float) -> tuple[list[Post], dict[str, float]]:
+    """Keep recent hiring posts. Also return the age in hours of every post with a known time, by URN."""
     kept: list[Post] = []
-    oldest: float | None = None
+    ages: dict[str, float] = {}
     for raw in raws:
         post = to_post(raw, job, now)
         if post is None:
             continue
         age = post.hours_ago(now)
-        oldest = age if oldest is None else max(oldest, age)
+        ages[post.urn] = age
         if age <= max_hours and is_hiring_post(post.text):
             kept.append(post)
-    return kept, oldest
+    return kept, ages
+
+
+def batch_is_past_cutoff(ages: dict[str, float], new_urns: set[str], max_hours: float) -> bool:
+    """True when every newly loaded post with a known time is past the cutoff.
+
+    Looking at the whole new batch, not the single oldest post, means one stray old post
+    (LinkedIn's "Latest" order isn't strictly by date) doesn't end the search early.
+    """
+    fresh = [ages[urn] for urn in new_urns if urn in ages]
+    return bool(fresh) and min(fresh) > max_hours
 
 
 def _load_more(page) -> None:
@@ -103,9 +113,9 @@ def scrape_posts(page, job: str, *, say: Say, max_hours: float = 48, max_posts: 
     kept: dict[str, Post] = {}
     seen: set[str] = set()
 
-    def result(stopped: str | None = None, interrupted: bool = False) -> ScrapeResult:
+    def result(stopped: str | None = None, interrupted: bool = False, blocked: bool = False) -> ScrapeResult:
         posts = sorted(kept.values(), key=lambda p: p.posted_at, reverse=True)[:max_posts]
-        return ScrapeResult(posts, stopped, interrupted)
+        return ScrapeResult(posts, stopped, interrupted, blocked)
 
     try:
         url = build_search_url(job)
@@ -119,11 +129,11 @@ def scrape_posts(page, job: str, *, say: Say, max_hours: float = 48, max_posts: 
             raws = run_extract(page, "peerpatchExtractPosts")
             new_urns = {r["urn"] for r in raws} - seen
             seen |= new_urns
-            posts, oldest = select_posts(raws, job, now, max_hours)
+            posts, ages = select_posts(raws, job, now, max_hours)
             for post in posts:
                 kept.setdefault(post.urn, post)
             say(f"  Posts: {len(seen)} looked at, {len(kept)} hiring posts kept")
-            if len(kept) >= max_posts or (oldest is not None and oldest > max_hours):
+            if len(kept) >= max_posts or batch_is_past_cutoff(ages, new_urns, max_hours):
                 break
             stale_rounds = 0 if new_urns else stale_rounds + 1
             if stale_rounds >= 2:
@@ -134,7 +144,7 @@ def scrape_posts(page, job: str, *, say: Say, max_hours: float = 48, max_posts: 
         save_debug(page, debug_dir, "posts")
     except ScrapeStopped as stop:
         save_debug(page, debug_dir, "posts-stopped")
-        return result(str(stop))
+        return result(str(stop), blocked=True)
     except PlaywrightError as err:
         return result(f"Chrome had a problem during the post search: {first_line(err)}")
     except KeyboardInterrupt:
