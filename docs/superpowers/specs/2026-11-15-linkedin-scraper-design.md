@@ -1,7 +1,7 @@
 # PeerPatch LinkedIn scraper: design
 
 Date: 15 November 2026
-Status: draft, waiting for review
+Status: approved 15 November 2026
 
 ## What it's for
 
@@ -54,6 +54,8 @@ Options:
 | `--skip-posts`, `--skip-jobs` | off | Run only one half |
 | `--debug` | off | Save every page's raw HTML into the results folder |
 | `--no-open` | off | Don't open the HTML report at the end |
+| `--profile-dir` | `chrome-profile/` next to the tool | Where Chrome keeps the LinkedIn login |
+| `--results-dir` | `results/` next to the tool | Where results go |
 
 ## Flow
 
